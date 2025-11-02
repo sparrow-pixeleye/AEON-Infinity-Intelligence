@@ -1,185 +1,148 @@
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 import json
 import os
-import tempfile
 
+# === Environment-safe memory path ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# === Detect environment and choose a safe writable path ===
-def get_memory_path():
-    """
-    Returns a writable path for memory.json:
-    - Local: ~/aeon_infinity_data/memory.json
-    - Vercel (read-only FS): /tmp/memory.json
-    """
-    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
-        # Running on Vercel
-        path = os.path.join(tempfile.gettempdir(), "memory.json")
-        print(f"🧊 Detected Vercel environment — using temp file: {path}")
-    else:
-        # Local environment
-        base_dir = os.path.join(os.path.expanduser("~"), "aeon_infinity_data")
-        os.makedirs(base_dir, exist_ok=True)
-        path = os.path.join(base_dir, "memory.json")
-    return path
+# Detect if running on Vercel (read-only root filesystem)
+if os.getenv("VERCEL"):
+    MEMORY_DIR = "/tmp"
+else:
+    MEMORY_DIR = os.path.join(BASE_DIR, "data")
 
+# Final memory file path
+MEMORY_PATH = os.path.join(MEMORY_DIR, "memory.json")
 
-MEMORY_PATH = get_memory_path()
-
+# Ensure directory exists (only works locally; /tmp always exists)
+os.makedirs(MEMORY_DIR, exist_ok=True)
 
 # === Time utilities ===
 def get_time_info():
     now = datetime.now()
     return {
-        'time': now.strftime('%H:%M:%S'),
-        'date': now.strftime('%A, %B %d, %Y'),
-        'timezone': 'UTC',
-        'timestamp': now.isoformat()
+        "time": now.strftime("%H:%M:%S"),
+        "date": now.strftime("%A, %B %d, %Y"),
+        "timezone": "UTC",
+        "timestamp": now.isoformat()
     }
-
 
 # === Perplexity AI search ===
 def perplexity_search(query, max_results=5):
     """
-    Perform web search using Perplexity AI API
+    Perform web search using Perplexity AI API.
+    Returns AI-generated text or None on failure.
     """
     api_key = "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"
-
     if not api_key:
-        print("❌ Perplexity API key not found")
+        print("❌ Perplexity API key missing.")
         return None
 
     try:
         headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
         }
 
-        # Enhanced prompt for better search results
-        search_prompt = f"""Please provide comprehensive, accurate, and up-to-date information about: {query}
-
-        Requirements:
-        - Include the most recent information available
-        - Cite key facts and figures when possible
-        - Mention relevant dates, events, or developments
-        - If discussing current events, note the timeliness
-        - Provide context and background when helpful
-        - Structure the response in a clear, readable format
-        
-        Focus on delivering valuable insights that answer the user's query thoroughly."""
+        prompt = f"""Please provide comprehensive, up-to-date information about: {query}.
+        Include key facts, context, and relevant dates. Write clearly and concisely."""
 
         payload = {
             "model": "sonar",
             "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a helpful AI assistant with access to real-time web search. Provide accurate, up-to-date information with proper context and citations when possible."
-                },
-                {
-                    "role": "user",
-                    "content": search_prompt
-                }
+                {"role": "system", "content": "You are a helpful AI assistant with live web access."},
+                {"role": "user", "content": prompt}
             ],
             "max_tokens": 1500,
             "temperature": 0.2
         }
 
-        print(f"🔍 Sending request to Perplexity API: {query[:50]}...")
-        response = requests.post(
+        print(f"🌐 Searching Perplexity for: {query[:60]}...")
+        resp = requests.post(
             "https://api.perplexity.ai/chat/completions",
             headers=headers,
             json=payload,
             timeout=20
         )
 
-        if response.status_code == 200:
-            data = response.json()
-            result = data['choices'][0]['message']['content']
-            print(f"✅ Perplexity search successful: {len(result)} characters")
+        if resp.status_code == 200:
+            data = resp.json()
+            result = data["choices"][0]["message"]["content"]
+            print("✅ Perplexity search successful.")
             return result
         else:
-            print(f"❌ Perplexity API error: {response.status_code} - {response.text}")
+            print(f"❌ Perplexity API error: {resp.status_code} - {resp.text}")
             return None
-
     except Exception as e:
-        print(f"❌ Perplexity search error: {e}")
+        print(f"❌ Perplexity search failed: {e}")
         return None
-
 
 # === Fallback web search ===
-def web_search(query, max_results=3):
-    """
-    Fallback web search function
-    """
+def web_search(query):
+    """Simple fallback using Wikipedia or DuckDuckGo."""
     try:
         print(f"🔍 Fallback web search: {query}")
-        # Simple Wikipedia search first
         wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query.replace(' ', '_')}"
-        wiki_response = requests.get(wiki_url, timeout=10)
+        wiki_resp = requests.get(wiki_url, timeout=10)
 
-        if wiki_response.status_code == 200:
-            data = wiki_response.json()
-            result = data.get('extract', 'No summary available.')
-            print("✅ Wikipedia search successful")
-            return result
+        if wiki_resp.status_code == 200:
+            data = wiki_resp.json()
+            if "extract" in data:
+                print("✅ Wikipedia search successful.")
+                return data["extract"]
 
-        # Fallback to DuckDuckGo instant answer
+        # Fallback: DuckDuckGo
         ddg_url = "https://api.duckduckgo.com/"
-        params = {
-            'q': query,
-            'format': 'json',
-            'no_html': 1,
-            'skip_disambig': 1
-        }
+        params = {"q": query, "format": "json", "no_html": 1}
+        ddg_resp = requests.get(ddg_url, params=params, timeout=10)
 
-        ddg_response = requests.get(ddg_url, params=params, timeout=10)
-        if ddg_response.status_code == 200:
-            data = ddg_response.json()
-            if data.get('Abstract'):
-                print("✅ DuckDuckGo search successful")
-                return data['Abstract']
-            elif data.get('Answer'):
-                print("✅ DuckDuckGo answer found")
-                return data['Answer']
+        if ddg_resp.status_code == 200:
+            data = ddg_resp.json()
+            if data.get("Abstract"):
+                return data["Abstract"]
+            if data.get("Answer"):
+                return data["Answer"]
 
-        print("❌ Fallback search failed")
+        print("❌ No fallback results found.")
         return None
-
     except Exception as e:
         print(f"❌ Web search error: {e}")
         return None
 
-
-# === Formatting ===
+# === Formatting helper ===
 def format_response(text, message_type="assistant"):
-    """Format responses with appropriate styling"""
+    """Format responses nicely for display."""
     if message_type == "assistant":
         return f"**AEON ∞:** {text}"
     return text
 
-
-# === Memory file helpers ===
-def load_memory():
-    """Load memory.json safely."""
+# === Memory helpers (renamed to avoid collision with app.py) ===
+def load_json_memory():
+    """Load conversation memory safely."""
     if not os.path.exists(MEMORY_PATH):
-        return {}
+        return []
     try:
-        with open(MEMORY_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        with open(MEMORY_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Ensure memory is always a list
+            return data if isinstance(data, list) else []
     except json.JSONDecodeError:
-        print("⚠️ memory.json is corrupted; returning empty dict.")
-        return {}
+        print("⚠️ memory.json corrupted. Returning empty list.")
+        return []
     except Exception as e:
         print(f"❌ Error reading memory.json: {e}")
-        return {}
+        return []
 
-
-def save_memory(data):
-    """Save data safely to memory.json."""
+def save_json_memory(data):
+    """Save conversation memory safely."""
     try:
-        with open(MEMORY_PATH, 'w', encoding='utf-8') as f:
+        # Trim memory to last 20 messages
+        if len(data) > 20:
+            data = data[-20:]
+
+        with open(MEMORY_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f"✅ memory.json updated successfully at {MEMORY_PATH}")
+        print(f"✅ memory.json saved at {MEMORY_PATH}")
     except Exception as e:
         print(f"❌ Error saving memory.json: {e}")
