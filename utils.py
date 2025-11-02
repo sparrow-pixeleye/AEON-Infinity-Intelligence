@@ -17,9 +17,10 @@ def perplexity_search(query, max_results=5):
     """
     Perform web search using Perplexity AI API
     """
-    api_key = "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"
+    api_key = "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"
     
     if not api_key:
+        print("❌ Perplexity API key not found")
         return None
     
     try:
@@ -57,6 +58,7 @@ def perplexity_search(query, max_results=5):
             "temperature": 0.2
         }
         
+        print(f"🔍 Sending request to Perplexity API: {query[:50]}...")
         response = requests.post(
             "https://api.perplexity.ai/chat/completions",
             headers=headers,
@@ -66,13 +68,15 @@ def perplexity_search(query, max_results=5):
         
         if response.status_code == 200:
             data = response.json()
-            return data['choices'][0]['message']['content']
+            result = data['choices'][0]['message']['content']
+            print(f"✅ Perplexity search successful: {len(result)} characters")
+            return result
         else:
-            print(f"Perplexity API error: {response.status_code} - {response.text}")
+            print(f"❌ Perplexity API error: {response.status_code} - {response.text}")
             return None
             
     except Exception as e:
-        print(f"Perplexity search error: {e}")
+        print(f"❌ Perplexity search error: {e}")
         return None
 
 def web_search(query, max_results=3):
@@ -80,13 +84,16 @@ def web_search(query, max_results=3):
     Fallback web search function
     """
     try:
+        print(f"🔍 Fallback web search: {query}")
         # Simple Wikipedia search first
         wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query.replace(' ', '_')}"
         wiki_response = requests.get(wiki_url, timeout=10)
         
         if wiki_response.status_code == 200:
             data = wiki_response.json()
-            return data.get('extract', 'No summary available.')
+            result = data.get('extract', 'No summary available.')
+            print("✅ Wikipedia search successful")
+            return result
         
         # Fallback to DuckDuckGo instant answer
         ddg_url = f"https://api.duckduckgo.com/"
@@ -101,20 +108,21 @@ def web_search(query, max_results=3):
         if ddg_response.status_code == 200:
             data = ddg_response.json()
             if data.get('Abstract'):
+                print("✅ DuckDuckGo search successful")
                 return data['Abstract']
             elif data.get('Answer'):
+                print("✅ DuckDuckGo answer found")
                 return data['Answer']
         
+        print("❌ Fallback search failed")
         return None
             
     except Exception as e:
-        print(f"Web search error: {e}")
+        print(f"❌ Web search error: {e}")
         return None
 
 def format_response(text, message_type="assistant"):
     """Format responses with appropriate styling"""
     if message_type == "assistant":
         return f"**AEON ∞:** {text}"
-
     return text
-
