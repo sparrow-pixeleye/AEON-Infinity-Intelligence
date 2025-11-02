@@ -3,14 +3,29 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import json
 import os
+import tempfile
 
 
-# === Safe writable path for memory.json (Windows-friendly) ===
-# This ensures the file is stored in your user folder, which is always writable.
-DATA_DIR = os.path.join(os.path.expanduser("~"), "aeon_infinity_data")
-os.makedirs(DATA_DIR, exist_ok=True)
+# === Detect environment and choose a safe writable path ===
+def get_memory_path():
+    """
+    Returns a writable path for memory.json:
+    - Local: ~/aeon_infinity_data/memory.json
+    - Vercel (read-only FS): /tmp/memory.json
+    """
+    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+        # Running on Vercel
+        path = os.path.join(tempfile.gettempdir(), "memory.json")
+        print(f"🧊 Detected Vercel environment — using temp file: {path}")
+    else:
+        # Local environment
+        base_dir = os.path.join(os.path.expanduser("~"), "aeon_infinity_data")
+        os.makedirs(base_dir, exist_ok=True)
+        path = os.path.join(base_dir, "memory.json")
+    return path
 
-MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
+
+MEMORY_PATH = get_memory_path()
 
 
 # === Time utilities ===
