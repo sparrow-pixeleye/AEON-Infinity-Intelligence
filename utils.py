@@ -17,7 +17,7 @@ def perplexity_search(query, max_results=5):
     """
     Perform web search using Perplexity AI API
     """
-    api_key = "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"
+    api_key = "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"
     
     if not api_key:
         return None
@@ -117,3 +117,4 @@ def format_response(text, message_type="assistant"):
         return f"**AEON ∞:** {text}"
 
     return text
+
