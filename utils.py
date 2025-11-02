@@ -5,12 +5,12 @@ import json
 import os
 
 
-# === File path setup for memory.json ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MEMORY_PATH = os.path.join(BASE_DIR, 'data', 'memory.json')
+# === Safe writable path for memory.json (Windows-friendly) ===
+# This ensures the file is stored in your user folder, which is always writable.
+DATA_DIR = os.path.join(os.path.expanduser("~"), "aeon_infinity_data")
+os.makedirs(DATA_DIR, exist_ok=True)
 
-# Ensure the "data" folder exists
-os.makedirs(os.path.dirname(MEMORY_PATH), exist_ok=True)
+MEMORY_PATH = os.path.join(DATA_DIR, "memory.json")
 
 
 # === Time utilities ===
@@ -110,7 +110,7 @@ def web_search(query, max_results=3):
             return result
 
         # Fallback to DuckDuckGo instant answer
-        ddg_url = f"https://api.duckduckgo.com/"
+        ddg_url = "https://api.duckduckgo.com/"
         params = {
             'q': query,
             'format': 'json',
@@ -165,6 +165,6 @@ def save_memory(data):
     try:
         with open(MEMORY_PATH, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        print("✅ memory.json updated successfully.")
+        print(f"✅ memory.json updated successfully at {MEMORY_PATH}")
     except Exception as e:
         print(f"❌ Error saving memory.json: {e}")
