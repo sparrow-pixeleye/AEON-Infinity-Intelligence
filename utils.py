@@ -115,4 +115,5 @@ def format_response(text, message_type="assistant"):
     """Format responses with appropriate styling"""
     if message_type == "assistant":
         return f"**AEON ∞:** {text}"
+
     return text
